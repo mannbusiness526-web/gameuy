@@ -1,0 +1,672 @@
+Berikut kode index.html game kejar-kejaran seru "Police Runner" dengan kontrol keyboard dan grafis dinamis:
+
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>POLICE RUNNER - Kejar-kejaran Seru!</title>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        user-select: none;
+    }
+
+    body {
+        background: linear-gradient(145deg, #0a0f1e 0%, #07111f 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Segoe UI', 'Poppins', 'Press Start 2P', monospace, system-ui;
+        padding: 20px;
+    }
+
+    /* Container game */
+    .game-wrapper {
+        background: #00000055;
+        border-radius: 48px;
+        padding: 20px;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 25px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    canvas {
+        display: block;
+        margin: 0 auto;
+        border-radius: 28px;
+        box-shadow: 0 0 0 3px #ffd966, 0 0 0 8px #1e2a3a, 0 20px 35px black;
+        cursor: none;
+        background-color: #1a2a2f;
+    }
+
+    .info-panel {
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 15px;
+        flex-wrap: wrap;
+        background: #0f1422cc;
+        backdrop-filter: blur(8px);
+        padding: 12px 24px;
+        border-radius: 60px;
+        border: 1px solid gold;
+    }
+
+    .score-box, .best-box, .status-box {
+        background: #03060e80;
+        padding: 6px 18px;
+        border-radius: 32px;
+        font-weight: bold;
+        font-family: monospace;
+        letter-spacing: 1px;
+    }
+
+    .score-box span, .best-box span {
+        color: #ffd966;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    .score-value, .best-value {
+        font-size: 1.7rem;
+        font-weight: 800;
+        color: #f2c94c;
+        margin-left: 8px;
+        text-shadow: 0 0 5px orange;
+    }
+
+    .status-box {
+        background: #1e2a3a;
+        color: #f0f0f0;
+        font-size: 0.9rem;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    button {
+        background: linear-gradient(95deg, #f5a623, #e67e22);
+        border: none;
+        padding: 8px 24px;
+        border-radius: 40px;
+        font-weight: bold;
+        font-family: monospace;
+        font-size: 1rem;
+        color: #1f1a0c;
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: 0 4px 0 #8b3c00;
+    }
+
+    button:active {
+        transform: translateY(2px);
+        box-shadow: 0 1px 0 #8b3c00;
+    }
+
+    .controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        background: #00000070;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-size: 0.7rem;
+        color: #ccc;
+    }
+
+    .controls i {
+        font-style: normal;
+        background: #2c3e55;
+        padding: 4px 8px;
+        border-radius: 30px;
+        font-weight: bold;
+    }
+
+    @media (max-width: 860px) {
+        .info-panel { flex-direction: column; align-items: stretch; text-align: center; gap: 8px; }
+        .controls { justify-content: center; }
+        .score-value, .best-value { font-size: 1.3rem; }
+    }
+</style>
+</head>
+<body>
+<div>
+    <div class="game-wrapper">
+        <canvas id="gameCanvas" width="900" height="550"></canvas>
+        <div class="info-panel">
+            <div class="score-box">🏆 SCORE <span class="score-value" id="scoreDisplay">0</span></div>
+            <div class="best-box">⭐ BEST <span class="best-value" id="bestDisplay">0</span></div>
+            <div class="status-box" id="statusMessage">🚔 KEJAR! ← → ↑ ↓</div>
+            <button id="resetGameBtn">🔄 RESTART CHASE</button>
+        </div>
+        <div class="controls">
+            <span>🎮 CONTROL : </span>
+            <i>← →</i> <i>↑ ↓</i> &nbsp;&nbsp;| Lari dari musuh! Koin 🪙 +10, ❤️ +1 chance
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- CANVAS ----------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ---------- GAME DIMENSIONS ----------
+        const W = 900, H = 550;
+        
+        // ---------- PLAYER ----------
+        let player = {
+            x: W/2,
+            y: H - 70,
+            radius: 20,
+            speed: 5.2,
+            health: 3,
+            invincibleFrames: 0,   // detik tidak terkena damage setelah hit
+        };
+        
+        // ---------- MUSUH (kejar-kejaran) ----------
+        let enemies = [];
+        const MAX_ENEMIES = 6;
+        let enemyBaseSpeed = 2.1;
+        
+        // ---------- KOIN (power-up) ----------
+        let coins = [];
+        const MAX_COINS = 8;
+        
+        // ---------- HEART (extra life) ----------
+        let hearts = [];
+        const MAX_HEARTS = 2;
+        
+        // ---------- GAME STATE ----------
+        let score = 0;
+        let bestScore = 0;
+        let gameRunning = true;
+        let frame = 0;
+        let spawnCounter = 0;
+        
+        // Efek kilat / particle
+        let particles = [];
+        
+        // ----- Load Best dari localStorage -----
+        try {
+            let saved = localStorage.getItem('chaseBestScore');
+            if(saved && !isNaN(parseInt(saved))) bestScore = parseInt(saved);
+        } catch(e) { console.log("no storage"); }
+        
+        // DOM elements
+        const scoreSpan = document.getElementById('scoreDisplay');
+        const bestSpan = document.getElementById('bestDisplay');
+        const statusDiv = document.getElementById('statusMessage');
+        const resetBtn = document.getElementById('resetGameBtn');
+        
+        // Update UI Score & Best
+        function updateUI() {
+            scoreSpan.innerText = score;
+            if(score > bestScore) {
+                bestScore = score;
+                bestSpan.innerText = bestScore;
+                localStorage.setItem('chaseBestScore', bestScore);
+            } else {
+                bestSpan.innerText = bestScore;
+            }
+            // tampilkan health di status
+            let heartIcon = "❤️".repeat(player.health);
+            if(player.health <= 0) heartIcon = "💀";
+            statusDiv.innerHTML = `🚔 HEALTH: ${heartIcon}  |  SCORE: ${score}`;
+        }
+        
+        // Utility: spawn musuh di batas atas / random edge dengan arah ke player
+        function spawnEnemy() {
+            if(enemies.length >= MAX_ENEMIES) return;
+            let side = Math.floor(Math.random() * 4); // 0:kiri,1:kanan,2:atas,3:bawah
+            let x, y;
+            const padding = 30;
+            if(side === 0) { // kiri
+                x = -padding;
+                y = Math.random() * (H - 80) + 40;
+            } else if(side === 1) { // kanan
+                x = W + padding;
+                y = Math.random() * (H - 80) + 40;
+            } else if(side === 2) { // atas
+                x = Math.random() * (W - 60) + 30;
+                y = -padding;
+            } else {
+                x = Math.random() * (W - 60) + 30;
+                y = H + padding;
+            }
+            // kecepatan vektor menuju player
+            let dx = player.x - x;
+            let dy = player.y - y;
+            let len = Math.hypot(dx, dy);
+            if(len < 0.01) len = 1;
+            let vx = (dx / len) * (enemyBaseSpeed + Math.random() * 1.2);
+            let vy = (dy / len) * (enemyBaseSpeed + Math.random() * 1.2);
+            enemies.push({
+                x: x, y: y, radius: 18,
+                vx: vx, vy: vy,
+                color: `hsl(${Math.random() * 20 + 340}, 70%, 55%)`
+            });
+        }
+        
+        // Spawn koin (di area aman)
+        function spawnCoin() {
+            if(coins.length >= MAX_COINS) return;
+            coins.push({
+                x: Math.random() * (W - 60) + 30,
+                y: Math.random() * (H - 80) + 40,
+                radius: 12,
+                collected: false
+            });
+        }
+        
+        // Spawn hati (extra life)
+        function spawnHeart() {
+            if(hearts.length >= MAX_HEARTS) return;
+            hearts.push({
+                x: Math.random() * (W - 70) + 35,
+                y: Math.random() * (H - 80) + 40,
+                radius: 12,
+            });
+        }
+        
+        // Particle efek tabrakan / koleksi
+        function addParticles(x, y, color, count=6) {
+            for(let i=0;i<count;i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let speed = Math.random() * 3 + 1;
+                let vx = Math.cos(angle) * speed;
+                let vy = Math.sin(angle) * speed;
+                particles.push({
+                    x: x, y: y, vx: vx, vy: vy, life: 0.8, maxLife: 0.8,
+                    size: Math.random() * 4 + 2, color: color
+                });
+            }
+        }
+        
+        // Damage player
+        function damagePlayer() {
+            if(!gameRunning) return;
+            if(player.invincibleFrames > 0) return; // i-frames
+            player.health--;
+            player.invincibleFrames = 25;  // sekitar 0.4 detik (60fps -> 25 frame)
+            addParticles(player.x, player.y, "#ff4444", 12);
+            updateUI();
+            if(player.health <= 0) {
+                gameRunning = false;
+                statusDiv.innerHTML = "💀 GAME OVER! 💀 Tekan RESTART";
+                updateUI();
+            } else {
+                // efek knockback kecil ketika terkena
+                // tidak perlu knockback ekstrim agar tidak frustasi, sedikit dorong
+                for(let e of enemies) {
+                    let dx = player.x - e.x;
+                    let dy = player.y - e.y;
+                    let dist = Math.hypot(dx,dy);
+                    if(dist < player.radius + e.radius) {
+                        let angle = Math.atan2(dy, dx);
+                        player.x += Math.cos(angle) * 12;
+                        player.y += Math.sin(angle) * 12;
+                        // boundary clamp
+                        player.x = Math.min(W - player.radius, Math.max(player.radius, player.x));
+                        player.y = Math.min(H - player.radius, Math.max(player.radius, player.y));
+                    }
+                }
+            }
+        }
+        
+        // Koleksi koin & heart
+        function collectItems() {
+            // Koin
+            for(let i=0; i<coins.length; i++) {
+                let c = coins[i];
+                let dist = Math.hypot(player.x - c.x, player.y - c.y);
+                if(dist < player.radius + c.radius) {
+                    // tambah score
+                    score += 10;
+                    addParticles(c.x, c.y, "#FFD966", 8);
+                    coins.splice(i,1);
+                    i--;
+                    updateUI();
+                }
+            }
+            // Hati (extra life)
+            for(let i=0; i<hearts.length; i++) {
+                let h = hearts[i];
+                let dist = Math.hypot(player.x - h.x, player.y - h.y);
+                if(dist < player.radius + h.radius) {
+                    if(player.health < 5) { // maks 5 hati biar tidak overpower
+                        player.health = Math.min(5, player.health + 1);
+                        addParticles(h.x, h.y, "#ff69b4", 10);
+                        statusDiv.innerHTML = `❤️ +1 LIFE! ❤️`;
+                        setTimeout(()=> updateUI(), 100);
+                        updateUI();
+                    } else {
+                        // jika health sudah penuh, tambah score bonus 20
+                        score += 20;
+                        addParticles(h.x, h.y, "#FFAA44", 8);
+                        updateUI();
+                    }
+                    hearts.splice(i,1);
+                    i--;
+                }
+            }
+        }
+        
+        // Update posisi musuh + collision & bounce boundary ringan
+        function updateEnemies() {
+            for(let i=0; i<enemies.length; i++) {
+                let e = enemies[i];
+                // update posisi berdasarkan arah ke player (setiap frame arah diperbaharui, agar AI mengejar dinamis)
+                let dxToPlayer = player.x - e.x;
+                let dyToPlayer = player.y - e.y;
+                let lenTo = Math.hypot(dxToPlayer, dyToPlayer);
+                if(lenTo > 0.01) {
+                    let normX = dxToPlayer / lenTo;
+                    let normY = dyToPlayer / lenTo;
+                    let spd = enemyBaseSpeed + (score/500); // makin tinggi score makin cepat musuh (tantangan)
+                    let maxSpd = 5.5;
+                    let currentSpd = Math.min(maxSpd, spd);
+                    e.vx = normX * currentSpd + (Math.random() - 0.5) * 0.5;
+                    e.vy = normY * currentSpd + (Math.random() - 0.5) * 0.5;
+                }
+                e.x += e.vx;
+                e.y += e.vy;
+                
+                // boundary elastis supaya musuh tidak keluar arena
+                if(e.x - e.radius < 0) { e.x = e.radius; e.vx *= -0.8; }
+                if(e.x + e.radius > W) { e.x = W - e.radius; e.vx *= -0.8; }
+                if(e.y - e.radius < 0) { e.y = e.radius; e.vy *= -0.8; }
+                if(e.y + e.radius > H) { e.y = H - e.radius; e.vy *= -0.8; }
+                
+                // collision dengan player
+                if(gameRunning) {
+                    let distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
+                    if(distToPlayer < player.radius + e.radius) {
+                        damagePlayer();
+                        if(!gameRunning) break;
+                    }
+                }
+            }
+        }
+        
+        // update player movement dengan batasan + invincible frames
+        let keys = {
+            ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false
+        };
+        
+        function handleMovement() {
+            if(!gameRunning) return;
+            let moveX = 0, moveY = 0;
+            if(keys.ArrowLeft) moveX = -1;
+            if(keys.ArrowRight) moveX = 1;
+            if(keys.ArrowUp) moveY = -1;
+            if(keys.ArrowDown) moveY = 1;
+            if(moveX !== 0 || moveY !== 0) {
+                let len = Math.hypot(moveX, moveY);
+                moveX /= len;
+                moveY /= len;
+            }
+            let newX = player.x + moveX * player.speed;
+            let newY = player.y + moveY * player.speed;
+            player.x = Math.min(W - player.radius, Math.max(player.radius, newX));
+            player.y = Math.min(H - player.radius, Math.max(player.radius, newY));
+        }
+        
+        // Update invincibility frames
+        function updateInvincible() {
+            if(player.invincibleFrames > 0) {
+                player.invincibleFrames--;
+            }
+        }
+        
+        // Spawn logic berdasarkan score / frame untuk semakin seru
+        function updateSpawners() {
+            if(!gameRunning) return;
+            // spawn musuh makin cepat seiring score
+            let enemyDelay = Math.max(25, 55 - Math.floor(score / 180));
+            if(frame % enemyDelay === 0 && enemies.length < MAX_ENEMIES) {
+                spawnEnemy();
+            }
+            // koin spawn
+            if(frame % 38 === 0 && coins.length < MAX_COINS) {
+                if(Math.random() < 0.6) spawnCoin();
+            }
+            // hati spawn langka
+            if(frame % 280 === 0 && hearts.length < MAX_HEARTS && player.health <= 3) {
+                if(Math.random() < 0.45) spawnHeart();
+            }
+            // jika musuh terlalu sedikit spawn lebih agresif
+            if(enemies.length < 3 && frame % 40 === 0 && score > 50) spawnEnemy();
+        }
+        
+        // Update partikel
+        function updateParticles() {
+            for(let i=0;i<particles.length;i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.025;
+                if(p.life <= 0 || p.x < -20 || p.x > W+20 || p.y < -20 || p.y > H+20) {
+                    particles.splice(i,1);
+                    i--;
+                }
+            }
+        }
+        
+        // GAME LOOP DRAW (semua grafis)
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+            
+            // background dinamis (jalan aspal + efek kejar)
+            let grad = ctx.createLinearGradient(0,0,0,H);
+            grad.addColorStop(0, "#0e2a2f");
+            grad.addColorStop(1, "#1a3b44");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,W,H);
+            // grid garis kecepatan
+            ctx.strokeStyle = "#89cff0aa";
+            ctx.lineWidth = 1;
+            for(let i=0;i<W+20;i+=50) {
+                ctx.beginPath();
+                ctx.moveTo(i + (frame%100)*0.5, 0);
+                ctx.lineTo(i-30 + (frame%100)*0.2, H);
+                ctx.stroke();
+            }
+            
+            // draw koin
+            for(let c of coins) {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.radius-2, 0, Math.PI*2);
+                ctx.fillStyle = "#FFC107";
+                ctx.shadowBlur = 12;
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.radius-4, 0, Math.PI*2);
+                ctx.fillStyle = "#FFE484";
+                ctx.fill();
+                ctx.fillStyle = "#D4AF37";
+                ctx.font = "bold 16px monospace";
+                ctx.shadowBlur = 4;
+                ctx.fillText("🪙", c.x-8, c.y+6);
+                ctx.shadowBlur = 0;
+            }
+            
+            // draw hati
+            for(let h of hearts) {
+                ctx.beginPath();
+                ctx.arc(h.x, h.y, h.radius-1, 0, Math.PI*2);
+                ctx.fillStyle = "#FF5E7E";
+                ctx.fill();
+                ctx.font = "18px monospace";
+                ctx.fillStyle = "white";
+                ctx.fillText("❤️", h.x-9, h.y+7);
+            }
+            
+            // draw musuh (polisi jahat / pengejar)
+            for(let e of enemies) {
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+                ctx.fillStyle = "#C41E3A";
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(e.x-4, e.y-3, 4, 0, Math.PI*2);
+                ctx.fillStyle = "#F0F0F0";
+                ctx.fill();
+                ctx.fillStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(e.x-5, e.y-4, 1.8, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(e.x+2, e.y-3, 4, 0, Math.PI*2);
+                ctx.fillStyle = "#F0F0F0";
+                ctx.fill();
+                ctx.fillStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(e.x+1, e.y-4, 1.8, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = "#3b2a1f";
+                ctx.beginPath();
+                ctx.ellipse(e.x-1, e.y+4, 6, 4, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = "white";
+                ctx.font = "bold 20px monospace";
+                ctx.fillText("👮‍♂️", e.x-13, e.y-6);
+                ctx.shadowBlur = 0;
+            }
+            
+            // player (karakter lari)
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+            let playerColor = player.invincibleFrames > 0 && (Math.floor(Date.now()/50)%2 === 0) ? "#FFFFFF" : "#FFD966";
+            ctx.fillStyle = playerColor;
+            ctx.fill();
+            ctx.fillStyle = "#2c2e3a";
+            ctx.beginPath();
+            ctx.arc(player.x-6, player.y-4, 4, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(player.x-7, player.y-5, 2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "#5d3a1a";
+            ctx.beginPath();
+            ctx.ellipse(player.x+3, player.y-2, 4, 5, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = "#261a0e";
+            ctx.font = "28px monospace";
+            ctx.fillText("🏃‍♂️", player.x-14, player.y+8);
+            // badge polisi
+            ctx.fillStyle = "#0047AB";
+            ctx.font = "bold 12px monospace";
+            ctx.fillText("HERO", player.x-10, player.y-12);
+            
+            // partikel
+            for(let p of particles) {
+                ctx.globalAlpha = p.life;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            
+            // jika game over tulisan
+            if(!gameRunning) {
+                ctx.font = "bold 34monospace";
+                ctx.fillStyle = "#E63946";
+                ctx.shadowBlur = 0;
+                ctx.fillText("☠️ GAME OVER ☠️", W/2-140, H/2-40);
+                ctx.font = "20px monospace";
+                ctx.fillStyle = "white";
+                ctx.fillText("Tekan RESTART untuk kejar lagi!", W/2-160, H/2+30);
+            }
+            
+            // Tampilkan Petunjuk IFrames?
+            if(player.invincibleFrames > 0 && gameRunning) {
+                ctx.font = "bold 16px monospace";
+                ctx.fillStyle = "#FFFFFFCC";
+                ctx.fillText("✨ INVINCIBLE ✨", player.x-35, player.y-18);
+            }
+        }
+        
+        // LOOP utama
+        let animationId;
+        function gameLoop() {
+            if(gameRunning) {
+                handleMovement();
+                updateEnemies();
+                collectItems();
+                updateInvincible();
+                updateSpawners();
+                updateParticles();
+                // secara dinamis tingkat kesulitan musuh berdasarkan score
+                enemyBaseSpeed = 2.1 + (score / 800);
+                if(enemyBaseSpeed > 5) enemyBaseSpeed = 5;
+            }
+            draw();
+            frame++;
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Reset FULL game
+        function resetGame() {
+            gameRunning = true;
+            score = 0;
+            player.health = 3;
+            player.x = W/2;
+            player.y = H - 70;
+            player.invincibleFrames = 0;
+            enemies = [];
+            coins = [];
+            hearts = [];
+            particles = [];
+            frame = 0;
+            enemyBaseSpeed = 2.1;
+            updateUI();
+            // spawn awal 2 musuh agar seru
+            for(let i=0;i<2;i++) spawnEnemy();
+            spawnCoin();
+            spawnCoin();
+            statusDiv.innerHTML = "🚔 KEJAR! Hindari musuh kumpulkan koin!";
+            updateUI();
+        }
+        
+        // Keyboard event
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                keys[e.key] = true;
+            }
+            if(e.key === ' ' && !gameRunning) resetGame();
+        });
+        window.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            resetGame();
+        });
+        
+        // inisialisasi awal
+        resetGame();
+        updateUI();
+        gameLoop();
+        
+        // resize canvas tetap
+        canvas.width = W;
+        canvas.height = H;
+    })();
+</script>
+</body>
+</html>
+```
